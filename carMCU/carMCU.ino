@@ -1,23 +1,25 @@
 ///////////////////////////////////////
 //
 // BlueTooth miniCar
-// ver 1.00 , 2021-01-04
+// ver 1.00 , 2021-01-06
 //
 ///////////////////////////////////////
 #include <SoftwareSerial.h>
+#include <Servo.h>
 #define DATASIZE 4
 
 const int LED_FRONT = 12;
 const int LED_BACK = 13;
-const int BLUE_RX = 3;
-const int BLUE_TX = 4;
+const int BLUE_RX = 2;
+const int BLUE_TX = 3;
 const int MOTOR_DCF = 6;
 const int MOTOR_DCB = 5;
 const int MOTOR_SER = 10;
 
-int reciveData[DATASIZE] = {0, 0, 127, 0}; // DC Motor F, DC Motor B, Servo, function
+char reciveData[DATASIZE] = {0, 0, 127, 0}; // DC Motor F, DC Motor B, Servo, function
 void writeErrorMsg(char*);
 
+Servo servo;
 SoftwareSerial BlueSerial(BLUE_RX,BLUE_TX);
 
 void setup() {
@@ -25,10 +27,10 @@ void setup() {
     pinMode(LED_BACK, OUTPUT);
     pinMode(MOTOR_DCF, OUTPUT);
     pinMode(MOTOR_DCB, OUTPUT);
-    pinMode(MOTOR_SER, OUTPUT);
+    servo.attach(MOTOR_SER);
     
-    Serial.begin(9600);
-    BlueSerial.begin(9600); 
+    Serial.begin(115200);
+    BlueSerial.begin(115200); 
 }
 
 void loop() {
@@ -38,19 +40,24 @@ void loop() {
             if(BlueSerial.read() == 'S') {
               for(int i=0; i<DATASIZE; i++) {
                   reciveData[i] = BlueSerial.read();
+                  Serial.write(reciveData[i]);
               }
               if(BlueSerial.read() != 'E') {
-                writeErrorMsg("[error] End sign is not send.");
+                writeErrorMsg("[error] End sign is not send.\n");
                 continue;
               }
               else if( (reciveData[3] & 0b00000110) != 0b00000010) {
-                writeErrorMsg("[error] check bit is wrong... 0&1");
+                writeErrorMsg("[error] check bit is wrong... 0&1\n");
                 continue;
               }
-              else if( ((reciveData[0] & 1) | (reciveData[1] & 1) | (reciveData[2] & 1)) & 1 != reciveData[3] & 1 ) {
-                writeErrorMsg("[error] check bit is wrong... P");
+              /*
+              else if( ((reciveData[0] & 0b00000001) + (reciveData[1] & 0b00000001) + (reciveData[2] & 0b00000001)) & 0b00000001 != reciveData[3] & 0b00000001 ) {
+                char compare_value = ((reciveData[0] & 0b00000001) + (reciveData[1] & 0b00000001) + (reciveData[2] & 0b00000001)) & 0b00000001 + 0x30;
+                Serial.write(compare_value);
+                writeErrorMsg("[error] check bit is wrong... P\n");
                 continue;
               }
+              */
             }
             else {
               continue;
@@ -60,7 +67,14 @@ void loop() {
         }
    
         //Servo Motor
-        analogWrite(MOTOR_SER, reciveData[2]); //0~127 LEFT , 128~256 RIGHT
+        char servo_degree = 90; //if(101 <= reciveData[2] && reciveData[2] <= 155)
+        if(reciveData[2] <= 100)
+          servo_degree = 90-reciveData[2];
+        else if(156 <= reciveData[2])
+          servo_degree = 90+(reciveData[2]-155);
+        else
+          writeErrorMsg("[warning] servo value is wrong type");
+        servo.write(servo_degree);
         
         //DC Motor
         analogWrite(MOTOR_DCF,reciveData[0]);
@@ -79,6 +93,8 @@ void loop() {
         } else {
             digitalWrite(LED_BACK,LOW);
         }
+
+        delay(200);
 
     }
 }
